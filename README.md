@@ -1,6 +1,6 @@
 # JeuProjet
 faire un jeu pokémon qui respecte certaine caractéristiques de base :
-          * déplacement du perso, de la caméra
+         / * déplacement du perso, de la caméra/
           * gestion de l'inventaire 
           * collisions
           * boite de dialogue
