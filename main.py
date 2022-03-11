@@ -10,9 +10,10 @@ class Player(pygame.sprite.Sprite):
 
         # charger la sprite sheet
         self.sprite_sheet = pygame.image.load("perso/sprite sheet perso.png").convert()
-        self.image = self.get_image(0, 0)
+        self.image = self.get_image(0, 0) # image du perso par défaut
         self.rect = self.image.get_rect()
         self.position = [x,y]
+        # dictionnaire qui stocke selon la direction(UP, DOWN...) toute les images de la sprite sheet
         self.images = { 'UP': self.get_images(36*3),
                         'DOWN': self.get_images(0),
                         'RIGHT': self.get_images(36),
@@ -20,13 +21,9 @@ class Player(pygame.sprite.Sprite):
         self.frame = 0
         self.next_frame = 0
         self.vitesse = 3
-        self.feet = pygame.Rect(0, 0, self.rect.width * 0.5, 15)
+        self.feet = pygame.Rect(0, 0, self.rect.width * 0.5, 15) # rect servant pour les collisionsdu perso
         self.old_position = self.position.copy()
-
-    def stop(self):
-        self.position = self.old_position.copy()
-        self.update()
-
+        
 
     def get_image(self, x, y):
         """ permet de récupérer une image dans la sprite sheet selon sa position x et y, puis de la renvoyer """
@@ -64,6 +61,13 @@ class Player(pygame.sprite.Sprite):
         """ permet d'actualiser la position du rect du perso (plus au topleft de l'écran), et du rect feet (en bas du rect du perso) """
         self.rect.topleft = self.position
         self.feet.midbottom = self.rect.midbottom
+        
+        
+    def stop(self):
+        """ c'est comme la fonction update sauf que cette fois la position du perso = son ancienne position, il va donc (normalement) s'arrêter"""
+        self.position = self.old_position.copy()
+        self.rect.topleft = self.position
+        self.feet.midbottom = self.rect.midbottom
 
 
     def deplacement_perso(self):
@@ -97,10 +101,10 @@ class Dragon(pygame.sprite.Sprite):
 
     def __init__(self):
         super().__init__()
-
+        # charge la sprite sheet du dragon
         self.dragon_sprite_sheet = pygame.image.load("images/dragon_sprite_sheet.png").convert_alpha()
         self.frame = 0
-        self.time_before_anim = 0
+        self.next_frame = 0
         self.dragonSprite = [self.dragon_sprite_sheet.subsurface(140*(x%5), 120*(x//5), 140, 120)for x in range(0,30)]
 
 
@@ -108,12 +112,12 @@ class Dragon(pygame.sprite.Sprite):
         """ permet une animation continue du dragon au ralenti (pas 60 FPS, mais 12 FPS) """
         self.dragon = self.dragonSprite[self.frame]
         self.dragon.set_colorkey((0,0,0))
-        self.time_before_anim += 20
+        self.next_frame += 20
 
-        if self.time_before_anim >= 100:
+        if self.next_frame >= 100:
 
             self.frame = (self.frame + 1) %  30
-            self.time_before_anim = 0
+            self.next_frame = 0
 
 
 
@@ -153,11 +157,10 @@ class Jeu:
         icone_esc = pygame.image.load("images/bouton_esc.png").convert_alpha() # Touche ECHAP
         self.icone_esc = pygame.transform.scale(icone_esc, (50,50))
 
-        # on charge le texte d'accueil + son rect
+        # on charge le texte d'accueil + son rect situé au centre de l'écran
         self.BLEU_NUIT = (25,25,112)
         police = pygame.font.Font(None, 40)
         self.texte = police.render('Appuyez sur ENTER',True, self.BLEU_NUIT)
-        # le texte se situe au centre de l'écran
         self.texte_rect = self.texte.get_rect()
         self.texte_rect.center = self.ecran_rect.center
         self.texte_ajout_rectangle = pygame.Rect(self.texte_rect[0]-3, self.texte_rect[1]-3, 290, 33)
@@ -173,21 +176,18 @@ class Jeu:
         self.entree_maison = self.tmx_data.get_object_by_name('maison_entree')
         self.entree_maison_rect = pygame.Rect(self.entree_maison.x, self.entree_maison.y, self.entree_maison.width, self.entree_maison.height)
 
-        # définir l'entrée de la maison2
-        self.entree_maison2 = self.tmx_data.get_object_by_name('maison_entree2')
-        self.entree_maison2_rect = pygame.Rect(self.entree_maison2.x, self.entree_maison2.y, self.entree_maison2.width, self.entree_maison2.height)
-
 
     def collisions(self):
-
+        """ fait une liste de rectangles /obstacles/ avec toutes leurs valeurs (x, y, largeur, hauteur)"""
         self.obstacles = []
-        # faire une liste des obstacles
+        
         for obj in self.tmx_data.objects:
             if obj.type == "collision":
                 self.obstacles.append(pygame.Rect(obj.x, obj.y, obj.width, obj.height))
 
+                
     def charger_monde(self, nom, pos_x, pos_y):
-
+        """ permet de charger un monde selon son nom et définir la position du perso selon les données données en argument """
         # charger la map
         self.tmx_data = pytmx.load_pygame(f"map/{nom}.tmx")
         map_data = pyscroll.TiledMapData(self.tmx_data)
@@ -203,52 +203,41 @@ class Jeu:
         self.player.position[1] = int(pos_y)
 
 
-    def entrer_maison1(self):
+    def switch_house(self):
+        """ permet de changer de monde, on passe du monde 'map' au monde 'house' + on peut sortir de la maison """
         self.charger_monde("house", 75, 320)
 
-        # définir l'entrée de la maison
+        # définir le point de sortie de la maison
         self.sortie_maison = self.tmx_data.get_object_by_name('maison_sortie')
         self.entree_maison_rect = pygame.Rect(self.sortie_maison.x, self.sortie_maison.y, self.sortie_maison.width, self.sortie_maison.height)
 
 
-
-    def entrer_maison2(self):
-        self.charger_monde("house2", 400, 400)
-
-        # définir l'entrée de la maison
-        self.sortie_maison = self.tmx_data.get_object_by_name('maison_sortie2')
-        self.entree_maison2_rect = pygame.Rect(self.sortie_maison.x, self.sortie_maison.y, self.sortie_maison.width, self.sortie_maison.height)
-
-
-
     def switch_map(self):
+        """ permet de changer de monde, on passe du monde 'house' au monde 'map' + on peut rentrer dans la maison """
         self.charger_monde("map", 150, 200)
 
-        # définir l'entrée de la maison
+        # définir le point d'entrée de la maison
         self.entree_maison = self.tmx_data.get_object_by_name('maison_entree')
         self.entree_maison_rect = pygame.Rect(self.entree_maison.x, self.entree_maison.y, self.entree_maison.width, self.entree_maison.height)
 
 
     def update(self):
+        """ gère et actualise le group, les changements de map, et les collisions"""
         self.group.update()
 
         if self.player.feet.colliderect(self.entree_maison_rect):
-            self.entrer_maison1()
+            self.switch_house()
 
         if self.player.feet.colliderect(self.entree_maison_rect):
             self.switch_map()
-
-        if self.player.feet.colliderect(self.entree_maison2_rect):
-            self.entrer_maison2()
 
         for sprite in self.group.sprites():
             if sprite.feet.collidelist(self.obstacles)>-1:
                 sprite.stop()
 
 
-
     def running(self):
-
+        """ c'est la boucle du jeu avec toutes les fonctions, toutes les images à afficher... """
         clock = pygame.time.Clock()
 
         running = True
@@ -276,8 +265,8 @@ class Jeu:
                 # fonctions de la map
                 if inventaire == False:
 
-                    self.player.old_position = self.player.position.copy()
-                    self.update() # actualise la position du perso et les collisions
+                    self.player.old_position = self.player.position.copy() # récupère l'ancienne position du perso
+                    self.update() # actualise la position du perso, les collisions, les changements de map
                     self.group.center(self.player.rect.center) # centre le perso et la map
                     self.player.deplacement_perso() # déplace et anime le perso
 
@@ -289,7 +278,7 @@ class Jeu:
                 # Inventaire
                 if inventaire == True:
 
-                    self.dragon.animation_dragon()
+                    self.dragon.animation_dragon() # anime en continu le dragon dans l'inventaire
 
                     # fermer l'invnetaire --> ECHAP
                     if event.type == pygame.KEYDOWN:
@@ -324,7 +313,7 @@ class Jeu:
 
             pygame.display.flip() # actualise l'écran
 
-            clock.tick(60)# La boucle tourne à 60 FPS
+            clock.tick(60) # La boucle tourne à 60 FPS
 
         pygame.quit()
 
@@ -333,4 +322,4 @@ class Jeu:
 if __name__ == '__main__':
     pygame.init()
     jeu = Jeu()
-    jeu.running()
+    jeu.running() # la boucle du jeu se lance
