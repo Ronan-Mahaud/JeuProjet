@@ -1,6 +1,12 @@
-import pygame, pytmx, pyscroll
+import pygame
+import pytmx
+import pyscroll
+from dataclasses import dataclass
 
 
+BLANC = [255, 255, 255]
+NOIR = [0, 0, 0]
+BLEU_NUIT = [25, 25, 112]
 
 
 class Player(pygame.sprite.Sprite):
@@ -9,15 +15,15 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
 
         # charger la sprite sheet
-        self.sprite_sheet = pygame.image.load("perso/sprite sheet perso.png").convert()
+        self.sprite_sheet = pygame.image.load("perso/spritesheet.png").convert()
         self.image = self.get_image(0, 0) # image du perso par défaut
         self.rect = self.image.get_rect()
         self.position = [x,y]
         # dictionnaire qui stocke selon la direction(UP, DOWN...) toute les images de la sprite sheet
-        self.images = { 'UP': self.get_images(self.image.get_width()*3),
-                        'DOWN': self.get_images(0),
-                        'RIGHT': self.get_images(self.image.get_width()),
-                        'LEFT': self.get_images(self.image.get_width()*2) }
+        self.images = { 'UP': self.get_images(0),
+                        'DOWN': self.get_images(self.image.get_width()*2),
+                        'RIGHT': self.get_images(self.image.get_width()*3),
+                        'LEFT': self.get_images(self.image.get_width()) }
         self.frame = 0
         self.next_frame = 0
         self.vitesse = 3
@@ -27,8 +33,8 @@ class Player(pygame.sprite.Sprite):
 
     def get_image(self, x, y):
         """ permet de récupérer une image dans la sprite sheet selon sa position x et y, puis de la renvoyer """
-        self.image = pygame.Surface([36, 36])
-        self.image.set_colorkey([255, 255, 255])
+        self.image = pygame.Surface([32, 32])
+        self.image.set_colorkey(NOIR)
         self.image.blit(self.sprite_sheet, (0, 0), (x, y, self.image.get_width(), self.image.get_height()))
         return self.image
 
@@ -38,7 +44,7 @@ class Player(pygame.sprite.Sprite):
         images = []
 
         for i in range(0,4):
-            x = i*36
+            x = i*self.image.get_width()
             image = self.get_image(x, y)
             images.append(image)
         return images
@@ -48,7 +54,7 @@ class Player(pygame.sprite.Sprite):
         """ selon sa direction, l'animation du déplacement va s'effectuer et sera ralentie """
 
         self.image = self.images[direction][self.frame]
-        self.image.set_colorkey([255, 255, 255])
+        self.image.set_colorkey(NOIR)
         self.next_frame += self.vitesse * 6
 
         if self.next_frame >= 200:
@@ -103,15 +109,18 @@ class Dragon(pygame.sprite.Sprite):
         super().__init__()
         # charge la sprite sheet du dragon
         self.dragon_sprite_sheet = pygame.image.load("images/dragon_sprite_sheet.png").convert_alpha()
+        width = 140
+        height = 120
+        # récupère dans l'ordre toutes les images de la sprite sheet
+        self.dragonSprite = [self.dragon_sprite_sheet.subsurface(width*(x%5), height*(x//5), width, height)for x in range(0,30)]
         self.frame = 0
         self.next_frame = 0
-        self.dragonSprite = [self.dragon_sprite_sheet.subsurface(140*(x%5), 120*(x//5), 140, 120)for x in range(0,30)]
 
 
     def animation_dragon(self):
         """ permet une animation continue du dragon au ralenti (pas 60 FPS, mais 12 FPS) """
         self.dragon = self.dragonSprite[self.frame]
-        self.dragon.set_colorkey([0, 0, 0])
+        self.dragon.set_colorkey(NOIR)
         self.next_frame += 20
 
         if self.next_frame >= 100:
@@ -121,7 +130,142 @@ class Dragon(pygame.sprite.Sprite):
 
 
 
-##-------------------------------------------------------------------------------------------
+##---------------------------------------------------------------------------------------------
+
+
+
+
+@dataclass
+class Portal:
+
+    # 4 arguments qui vont permettre de:
+    from_world: str    # définir le monde d'où vient le joueur
+    origin_point: str  # définir le passage par lequel il va switcher de monde
+    target_world: str  # définir le monde où il veut passer
+    player_spawn: str  # définir le point de spawn du joueur
+
+
+
+@dataclass
+class Map:
+
+    # 5 caractéristiques d'une map / d'un monde:
+    nom: str                        # le nom
+    obstacles: list[pygame.Rect]    # les obstacles
+    group: pyscroll.PyscrollGroup   # le groupe
+    tmx_data: pytmx.TiledMap        # le tmx_data
+    portals: list[Portal]           # les portails
+
+
+
+class MapManager:
+
+    def __init__(self, ecran, player):
+
+        self.maps = dict()
+        self.ecran = ecran
+        self.player = player
+        self.monde = "map"
+
+        # permet de passer de la carte à une des maisons
+        self.register_map("map", portals=[
+            Portal(from_world="map", origin_point="maison_entree", target_world="house", player_spawn="joueur_house"),
+            Portal(from_world="map", origin_point="maison_entree2", target_world="house2", player_spawn="joueur_house2")])
+
+        # permet de passer de la maison n°1 à la map
+        self.register_map("house", portals=[
+            Portal(from_world="house", origin_point="maison_sortie", target_world="map", player_spawn="joueur_sortie_house")])
+
+        # permet de passer de la maison n°2 à la map
+        self.register_map("house2", portals=[
+            Portal(from_world="house2", origin_point="maison_sortie", target_world="map", player_spawn="joueur_sortie_house2")])
+
+        # place le joueur au point "spawn_joueur"
+        self.spawn_player("spawn_joueur")
+
+
+    def check_collisions(self):
+        """ récupère les infos de l'origin_point pour que, si le joueur rentre en collison avec, il puisse changer de monde. Et vérification des collisions  """
+
+        # si le from_world de la classe Portal est le même que le monde, on définit l'origin_point qui est le rect d'accès à un autre monde
+        for portal in self.get_map().portals:
+            if portal.from_world == self.monde:
+                point = self.get_object(portal.origin_point)
+                rect = pygame.Rect(point.x, point.y, point.width, point.height)
+
+                # si les pieds du joueur rentrent en collision avec l'origin_point, le monde devient le target_world, et le joueur apparaît à l'objet player_spawn placé sur Tiled
+                if self.player.feet.colliderect(rect):
+                    self.monde = portal.target_world
+                    copy_portal = portal
+                    self.spawn_player(copy_portal.player_spawn)
+
+        # si les pieds du joueur rentre en collision avec la liste d'obstacles, il conserve la position d'avant avoir toucher un obstacle
+        for sprite in self.get_group().sprites():
+            if sprite.feet.collidelist(self.get_obstacles()) > -1:
+                sprite.stop()
+
+
+    def spawn_player(self, nom):
+        """ permet de définir le point de spawn du joueur sur Tiled en donnant le nom de l'objet """
+        point = self.get_object(nom)
+        self.player.position[0] = point.x
+        self.player.position[1] = point.y
+
+
+    def register_map(self, nom, portals=[]):
+        """ permet de charger la map selon son nom, et de charger la liste des portails """
+        # charger une map
+        tmx_data = pytmx.load_pygame(f"map/{nom}.tmx")
+        map_data = pyscroll.TiledMapData(tmx_data)
+        map_layer = pyscroll.BufferedRenderer(map_data, self.ecran.get_size(), zoom = 1.5)
+
+        # liste de Rectangles de collisions: obstacles
+        obstacles = []
+
+        for obj in tmx_data.objects:
+            if obj.type == "collision":
+                obstacles.append(pygame.Rect(obj.x, obj.y, obj.width, obj.height))
+
+        # définir un groupe de calques
+        group = pyscroll.PyscrollGroup(map_layer = map_layer, default_layer = 3)
+        group.add(self.player)
+
+        # instancier la classe Map selon le nom d'une map, chaque map possède son nom, ses obstacles, son groupe, ses données tmx, ses portails, ses PNJ...
+        self.maps[nom] = Map(nom, obstacles, group, tmx_data, portals)
+
+
+    def get_map(self):
+        """ renvoie le dictionnaire maps avec le nom du monde dans lequel on se trouve """
+        return self.maps[self.monde]
+
+    def get_group(self):
+        """ renvoie le groupe de calques qui constitue la map """
+        return self.get_map().group
+
+    def get_obstacles(self):
+        """ renvoie les obstacles selon le monde """
+        return self.get_map().obstacles
+
+    def get_object(self, nom):
+        """ renvoie le nom d'un objet qui constitue la map"""
+        return self.get_map().tmx_data.get_object_by_name(nom)
+
+    def draw(self):
+        """ permet de dessiner le groupe de calques sur l'écran """
+        self.get_group().draw(self.ecran)
+
+    def center(self):
+        """ permet de centrer le groupe sur le joueur"""
+        self.get_group().center(self.player.rect.center)
+
+    def update(self):
+        """ actualise le groupe et vérifie les collisions d'obstacles ou de portails """
+        self.get_group().update()
+        self.check_collisions()
+
+
+
+##---------------------------------------------------------------------------------------------
 
 
 
@@ -129,7 +273,6 @@ class Dragon(pygame.sprite.Sprite):
 class Jeu:
 
     def __init__(self):
-        global tmx_data
 
         # création de la surface d'affichage + du nom du jeu + de son icône
         self.ecran = pygame.display.set_mode((600, 600))
@@ -158,111 +301,21 @@ class Jeu:
         self.icone_esc = pygame.transform.scale(icone_esc, (50,50))
 
         # on charge le texte d'accueil + son rect situé au centre de l'écran
-        self.BLEU_NUIT = (25,25,112)
         police = pygame.font.Font(None, 40)
-        self.texte = police.render('Appuyez sur ENTER',True, self.BLEU_NUIT)
+        self.texte = police.render('Appuyez sur ENTER',True, BLEU_NUIT)
         self.texte_rect = self.texte.get_rect()
         self.texte_rect.center = self.ecran_rect.center
         self.texte_ajout_rectangle = pygame.Rect(self.texte_rect[0]-3, self.texte_rect[1]-3, 290, 33)
 
-
         # instance de classes
-        self.player = Player(400, 400)
+        self.player = Player(0,0)
         self.dragon = Dragon()
-
-        # charger la map
-        tmx_data = pytmx.load_pygame("map/map.tmx")
-        map_data = pyscroll.TiledMapData(tmx_data)
-        map_layer = pyscroll.BufferedRenderer(map_data, self.ecran.get_size(), zoom = 1.5)
-
-        # définir un groupe de calques
-        self.group = pyscroll.PyscrollGroup(map_layer = map_layer, default_layer = 3)
-        self.group.add(self.player)
-
-        # faire une liste des obstacles
-        self.obstacles = []
-
-        for obj in tmx_data.objects:
-            if obj.type == "collision":
-                self.obstacles.append(pygame.Rect(obj.x, obj.y, obj.width, obj.height))
-
-        # définir l'entrée de la maison
-        entree_maison = tmx_data.get_object_by_name('maison_entree')
-        self.entree_maison_rect = pygame.Rect(entree_maison.x, entree_maison.y, entree_maison.width, entree_maison.height)
-
-        # définir le monde dans lequel le perso se trouve
-        self.monde = 'map'
-
-
-    def switch_house(self):
-        """ permet de changer de monde, on passe du monde 'map' au monde 'house' + on peut sortir de la maison """
-        # charger la map
-        tmx_data = pytmx.load_pygame("map/house.tmx")
-        map_data = pyscroll.TiledMapData(tmx_data)
-        map_layer = pyscroll.BufferedRenderer(map_data, self.ecran.get_size(), zoom = 1.5)
-
-        # définir un groupe de calques
-        self.group = pyscroll.PyscrollGroup(map_layer = map_layer, default_layer = 4)
-        self.group.add(self.player)
-
-        # faire une liste des obstacles
-        self.obstacles = []
-
-        for obj in tmx_data.objects:
-            if obj.type == "collision":
-                self.obstacles.append(pygame.Rect(obj.x, obj.y, obj.width, obj.height))
-
-        # définir le point de sortie de la maison
-        entree_maison = tmx_data.get_object_by_name('maison_sortie')
-        self.entree_maison_rect = pygame.Rect(entree_maison.x, entree_maison.y, entree_maison.width, entree_maison.height)
-
-        # définir les coordonnées d'entrée du perso
-        self.player.position[0] = 80
-        self.player.position[1] = 320
-
-
-    def switch_map(self):
-        """ permet de changer de monde, on passe du monde 'map' au monde 'house' + on peut sortir de la maison """
-        # charger la map
-        tmx_data = pytmx.load_pygame("map/map.tmx")
-        map_data = pyscroll.TiledMapData(tmx_data)
-        map_layer = pyscroll.BufferedRenderer(map_data, self.ecran.get_size(), zoom = 1.5)
-
-        # définir un groupe de calques
-        self.group = pyscroll.PyscrollGroup(map_layer = map_layer, default_layer = 3)
-        self.group.add(self.player)
-
-        # faire une liste des obstacles
-        self.obstacles = []
-
-        for obj in tmx_data.objects:
-            if obj.type == "collision":
-                self.obstacles.append(pygame.Rect(obj.x, obj.y, obj.width, obj.height))
-
-        # définir le point de sortie de la maison
-        entree_maison = tmx_data.get_object_by_name('maison_entree')
-        self.entree_maison_rect = pygame.Rect(entree_maison.x, entree_maison.y, entree_maison.width, entree_maison.height)
-
-        # définir les coordonnées de sortie du perso
-        self.player.position[0] = 160
-        self.player.position[1] = 240
+        self.map_manager = MapManager(self.ecran, self.player)
 
 
     def update(self):
         """ gère et actualise le group, les changements de map, et les collisions"""
-        self.group.update()
-
-        if self.player.feet.colliderect(self.entree_maison_rect) and self.monde == 'map':
-            self.switch_house()
-            self.monde = 'house'
-
-        if self.player.feet.colliderect(self.entree_maison_rect) and self.monde == 'house':
-            self.switch_map()
-            self.monde = 'map'
-
-        for sprite in self.group.sprites():
-            if sprite.feet.collidelist(self.obstacles) > -1:
-                sprite.stop()
+        self.map_manager.update()
 
 
     def running(self):
@@ -297,8 +350,7 @@ class Jeu:
                     self.player.old_position = self.player.position.copy() # récupère l'ancienne position du perso
                     self.player.deplacement_perso() # déplace et anime le perso
                     self.update() # actualise la position du perso, les collisions, les changements de map
-                    self.group.center(self.player.rect.center) # centre le perso et la map
-
+                    self.map_manager.center() # centre le perso et la map
 
                     # inventaire --> TAB
                     if event.type == pygame.KEYDOWN:
@@ -321,7 +373,7 @@ class Jeu:
 
                 self.ecran.blit(self.img_acc,(0,0))
                 self.ecran.blit(self.icone_entrer,(self.ecran.get_width() - 195 ,self.ecran.get_height() - 60))
-                pygame.draw.rect(self.ecran, self.BLEU_NUIT, self.texte_ajout_rectangle, 2)
+                pygame.draw.rect(self.ecran, BLEU_NUIT, self.texte_ajout_rectangle, 2)
                 self.ecran.blit(self.texte, self.texte_rect)
 
             # autrement, on affiche les images...
@@ -337,9 +389,10 @@ class Jeu:
                 # ... de la map
                 else:
 
-                    self.group.draw(self.ecran)
+                    self.map_manager.draw() # dessine le groupe
                     self.ecran.blit(self.icone_sac,(self.ecran.get_width() - 130 ,self.ecran.get_height() - 50))
                     self.ecran.blit(self.icone_tab,(self.ecran.get_width() - 90 ,self.ecran.get_height() - 50))
+
 
             pygame.display.flip() # actualise l'écran
 
@@ -353,4 +406,3 @@ if __name__ == '__main__':
     pygame.init()
     jeu = Jeu()
     jeu.running() # la boucle du jeu se lance
-
