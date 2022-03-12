@@ -23,5 +23,5 @@ Pour que le programme fonctionne il faut que: - créer un dossier du projet dans
                                               
                                               
                                               
-N'oubliez pas de fréquemment revenir sur la page pour retélécharger les fichiers car il y aura des modifications sur le code du jeu et sur les maps!
+N'oubliez pas de fréquemment revenir sur la page pour retélécharger les fichiers car il y aura des modifications sur le code du jeu (main.py) et sur les maps (house.tmx, map.tmx)
                                               
