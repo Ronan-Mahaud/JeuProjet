@@ -15,15 +15,15 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
 
         # charger la sprite sheet
-        self.sprite_sheet = pygame.image.load("perso/spritesheet.png").convert()
+        self.sprite_sheet = pygame.image.load("perso/perso.png").convert()
         self.image = self.get_image(0, 0) # image du perso par défaut
         self.rect = self.image.get_rect()
         self.position = [x,y]
         # dictionnaire qui stocke selon la direction(UP, DOWN...) toute les images de la sprite sheet
-        self.images = { 'UP': self.get_images(0),
-                        'DOWN': self.get_images(self.image.get_width()*2),
-                        'RIGHT': self.get_images(self.image.get_width()*3),
-                        'LEFT': self.get_images(self.image.get_width()) }
+        self.images = { 'UP': self.get_images(self.image.get_width()*3),
+                        'DOWN': self.get_images(self.image.get_width()),
+                        'RIGHT': self.get_images(self.image.get_width()*2),
+                        'LEFT': self.get_images(0) }
         self.frame = 0
         self.next_frame = 0
         self.vitesse = 3
@@ -172,9 +172,14 @@ class MapManager:
             Portal(from_world="map", origin_point="maison_entree", target_world="house", player_spawn="joueur_house"),
             Portal(from_world="map", origin_point="maison_entree2", target_world="house2", player_spawn="joueur_house2")])
 
-        # permet de passer de la maison n°1 à la map
+        # permet de passer de la maison n°1 à la map ou à son étage supérieur
         self.register_map("house", portals=[
-            Portal(from_world="house", origin_point="maison_sortie", target_world="map", player_spawn="joueur_sortie_house")])
+            Portal(from_world="house", origin_point="maison_sortie", target_world="map", player_spawn="joueur_sortie_house"),
+            Portal(from_world="house", origin_point="maison_etage", target_world="house_etage", player_spawn="joueur_etage")])
+
+        # permet de passer de l'étage de la maison n°1 au RDC
+        self.register_map("house_etage", portals=[
+            Portal(from_world="house_etage", origin_point="maison_floor", target_world="house", player_spawn="joueur_floor")])
 
         # permet de passer de la maison n°2 à la map
         self.register_map("house2", portals=[
@@ -185,7 +190,7 @@ class MapManager:
 
 
     def check_collisions(self):
-        """ récupère les infos de l'origin_point pour que, si le joueur rentre en collison avec, il puisse changer de monde. Et vérification des collisions  """
+        """ récupère les infos de l'origin_point pour que, si le joueur rentre en collison avec, il puisse changer de monde. Et vérification des collisions avec les obstacles """
 
         # si le from_world de la classe Portal est le même que le monde, on définit l'origin_point qui est le rect d'accès à un autre monde
         for portal in self.get_map().portals:
@@ -227,7 +232,7 @@ class MapManager:
                 obstacles.append(pygame.Rect(obj.x, obj.y, obj.width, obj.height))
 
         # définir un groupe de calques
-        group = pyscroll.PyscrollGroup(map_layer = map_layer, default_layer = 3)
+        group = pyscroll.PyscrollGroup(map_layer = map_layer, default_layer = 4)
         group.add(self.player)
 
         # instancier la classe Map selon le nom d'une map, chaque map possède son nom, ses obstacles, son groupe, ses données tmx, ses portails, ses PNJ...
@@ -243,11 +248,11 @@ class MapManager:
         return self.get_map().group
 
     def get_obstacles(self):
-        """ renvoie les obstacles selon le monde """
+        """ renvoie les obstacles selon la map actuelle """
         return self.get_map().obstacles
 
     def get_object(self, nom):
-        """ renvoie le nom d'un objet qui constitue la map"""
+        """ renvoie le nom d'un objet qui constitue la map actuelle """
         return self.get_map().tmx_data.get_object_by_name(nom)
 
     def draw(self):
@@ -313,11 +318,6 @@ class Jeu:
         self.map_manager = MapManager(self.ecran, self.player)
 
 
-    def update(self):
-        """ gère et actualise le group, les changements de map, et les collisions"""
-        self.map_manager.update()
-
-
     def running(self):
         """ c'est la boucle du jeu avec toutes les fonctions, toutes les images à afficher... """
         clock = pygame.time.Clock()
@@ -349,7 +349,7 @@ class Jeu:
 
                     self.player.old_position = self.player.position.copy() # récupère l'ancienne position du perso
                     self.player.deplacement_perso() # déplace et anime le perso
-                    self.update() # actualise la position du perso, les collisions, les changements de map
+                    self.map_manager.update() # actualise le groupe, et les collisions d'obstacles ou de portails
                     self.map_manager.center() # centre le perso et la map
 
                     # inventaire --> TAB
