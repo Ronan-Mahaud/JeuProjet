@@ -25,5 +25,5 @@ Pour que le programme fonctionne il faut que: - créer un dossier du projet dans
                                               
                                               
                                               
-N'OUBLIEZ PAS DE FREQUEMMENT REVENIR SUR LE GITHUB POUR RETELECHARGER LES FICHIERS (CAR IL Y AURA DES MODIFICATIONS) SUR LE CODE DU JEU (main.py) ET SUR LES MAPS (house.tmx, map.tmx...) POUR LES ACTUALISER. 
+
                                               
